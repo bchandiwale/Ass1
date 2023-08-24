@@ -1,7 +1,7 @@
 
-name: Deploy to AWS App Runner
+name: "Deploy to App Runner"
 
-on: 
+on:
   push:
     branches:
       - main
@@ -12,43 +12,73 @@ on:
 jobs:
   DeployDev:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
     - uses: actions/checkout@v2
-    - name: Build and push to development environment
-      env:
-        AWS_REGION: us-east-1
-        AWS_ACCOUNT_ID: $
-        ECR_REPOSITORY: my-repository
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Build, tag, and push image to Amazon ECR
       run: |
-        # Build and push to development environment
-        docker build -t $ECR_REPOSITORY:latest .
-        docker push $ECR_REPOSITORY:latest
-        aws apprunner deploy-service --service-name app-runner-service-dev --region $AWS_REGION --image-tag latest --force-new-deployment
+        # Build the Docker image
+        docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} .
+
+        # Tag the Docker image
+        docker tag ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ${{ env.ECR_REPOSITORY }}:latest
+
+        # Push the Docker image to ECR
+        docker push ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        docker push ${{ env.ECR_REPOSITORY }}:latest
+    - name: Deploy to App Runner
+      uses: aws-actions/deploy-to-app-runner@v1
+      with:
+        image-url: ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        service-name: ${{ env.SERVICE_NAME_DEV }}
+        access-role-arn: ${{ secrets.AWS_ACCESS_ROLE_ARN }}
+        region: ${{ env.AWS_REGION }}
+        cpu: 256
+        memory: 512
+        port: 80
+        wait-for-service-stability: true
+    - name: App Runner output
+      run: echo "Deployment to ${{ env.SERVICE_NAME_DEV }} complete!"
+
   DeployPreProd:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v2
-    - name: Build and push to staging environment
-      env:
-        AWS_REGION: us-east-1
-        AWS_ACCOUNT_ID: $
-        ECR_REPOSITORY: my-repository
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Build, tag, and push image to Amazon ECR
       run: |
-        # Build and push to staging environment
-        docker build -t $ECR_REPOSITORY:latest .
-        docker push $ECR_REPOSITORY:latest
-        aws apprunner deploy-service --service-name app-runner-service-staging --region $AWS_REGION --image-tag latest --force-new-deployment
-  DeployProd:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build and push to production environment
-      env:
-        AWS_REGION: us-east-1
-        AWS_ACCOUNT_ID: $
-        ECR_REPOSITORY: my-repository
-      run: |
-        # Build and push to production environment
-        docker build -t $ECR_REPOSITORY:latest .
-        docker push $ECR_REPOSITORY:latest
-        aws apprunner deploy-service --service-name app-runner-service-prod --region $AWS_REGION --image-tag latest --force-new-deployment
+        # Build the Docker image
+        docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} .
+
+        # Tag the Docker image
+        docker tag ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ${{ env.ECR_REPOSITORY }}:latest
+
+        # Push the Docker image to ECR
+        docker push ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        docker push ${{ env.ECR_REPOSITORY }}:latest
+    - name: Deploy to App Runner
+      uses: aws-actions/deploy-to-app-runner@v1
+      with:
+        image-url: ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        service-name: ${{ env.SERVICE_NAME_PREPROD }}
+        access-role-arn: ${{ secrets.AWS_ACCESS_ROLE_ARN }}
+        region: ${{ env.AWS_REGION }}
+        cpu: 256
