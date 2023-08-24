@@ -1,4 +1,105 @@
-  - Checkout the code
-  - Build the Docker image
-  - Push the Docker image to Amazon ECR
-  - Deploy the App Runner service
+    name: Deploy to AWS App Runner
+    
+    on:
+      push:
+        branches:
+          - main
+      pull_request:
+        branches:
+          - main
+    
+    env:
+      AWS_REGION: us-east-1
+      AWS_ACCOUNT_ID: 123456789012
+      ECR_REPOSITORY: my-app-repository
+      DEV_SERVICE: my-app-dev
+      STAGING_SERVICE: my-app-staging
+      PROD_SERVICE: my-app-prod
+    
+    permissions:
+      - actions:
+        - ecr:GetAuthorizationToken
+        - ecr:BatchCheckLayerAvailability
+        - ecr:GetDownloadUrlForLayer
+        - ecr:BatchGetImage
+        - ecr:BatchGetPublicLayer
+        - ecr:InitiateLayerUpload
+        - ecr:UploadLayerPart
+        - ecr:CompleteLayerUpload
+        - ecr:PutImage
+    
+    jobs:
+      DeployDev:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@master
+          - name: Build and push image to ECR
+            run: |
+              # Build the Docker image
+              docker build -t $ECR_REPOSITORY:latest .
+              
+              # Get the ECR login command
+              $(aws ecr get-login --no-include-email --region $AWS_REGION)
+              
+              # Push the image to ECR
+              docker push $ECR_REPOSITORY:latest
+              
+              # Update the App Runner service with the new image
+              aws app-runner update-service --service-arn $DEV_SERVICE --region $AWS_REGION --image-tag latest
+          - name: Clean up
+            run: |
+              # Remove the image from ECR
+              docker rmi $ECR_REPOSITORY:latest
+              
+              # Log out of ECR
+              $(aws ecr get-logout --no-include-email --region $AWS_REGION)
+              
+      DeployPreProd:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@master
+          - name: Build and push image to ECR
+            run: |
+              # Build the Docker image
+              docker build -t $ECR_REPOSITORY:latest .
+              
+              # Get the ECR login command
+              $(aws ecr get-login --no-include-email --region $AWS_REGION)
+              
+              # Push the image to ECR
+              docker push $ECR_REPOSITORY:latest
+              
+              # Update the App Runner service with the new image
+              aws app-runner update-service --service-arn $STAGING_SERVICE --region $AWS_REGION --image-tag latest
+          - name: Clean up
+            run: |
+              # Remove the image from ECR
+              docker rmi $ECR_REPOSITORY:latest
+              
+              # Log out of ECR
+              $(aws ecr get-logout --no-include-email --region $AWS_REGION)
+              
+      DeployProd:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@master
+          - name: Build and push image to ECR
+            run: |
+              # Build the Docker image
+              docker build -t $ECR_REPOSITORY:latest .
+              
+              # Get the ECR login command
+              $(aws ecr get-login --no-include-email --region $AWS_REGION)
+              
+              # Push the image to ECR
+              docker push $ECR_REPOSITORY:latest
+              
+              # Update the App Runner service with the new image
+              aws app-runner update-service --service-arn $PROD_SERVICE --region $AWS_REGION --image-tag latest
+          - name: Clean up
+            run: |
+              # Remove the image from ECR
+              docker rmi $ECR_REPOSITORY:latest
+              
+              # Log out of ECR
+              $(aws ecr get-logout --no-include-email --region $AWS_REGION)
