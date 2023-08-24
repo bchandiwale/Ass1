@@ -1,1 +1,88 @@
-7. Outputs: The workflow outputs the service IDs for each environment.
+
+name: AWS App Runner Deployment
+
+on: 
+  push:
+    branches:
+      - newui_master
+  pull_request:
+    branches:
+      - newui_master
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: my-ecr-repository
+  DEV_SERVICE: my-app-runner-service-dev
+  STAGE_SERVICE: my-app-runner-service-stage
+  PROD_SERVICE: my-app-runner-service-prod
+
+jobs:
+  DeployDev:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Build, tag, and push image to Amazon ECR
+      run: |
+        # Build container
+        docker build -t $ECR_REPOSITORY:${{ github.sha }} .
+
+        # Tag container
+        docker tag $ECR_REPOSITORY:${{ github.sha }} $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
+
+        # Push container
+        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
+    - name: Deploy to App Runner
+      run: |
+        aws app-runner deploy-image \
+          --image-tag ${{ github.sha }} \
+          --service-name $DEV_SERVICE \
+          --region $AWS_REGION
+    - name: App Runner output
+      run: |
+        aws app-runner describe-service \
+          --service-name $DEV_SERVICE \
+          --region $AWS_REGION \
+          --query Service.Outputs
+  DeployPreProd:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/newui_master'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Build, tag, and push image to Amazon ECR
+      run: |
+        # Build container
+        docker build -t $ECR_REPOSITORY:${{ github.sha }} .
+
+        # Tag container
+        docker tag $ECR_REPOSITORY:${{ github.sha }} $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
+
+        # Push container
+        docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
+    - name: Deploy to App Runner
+      run: |
+        aws app-runner deploy-image \
+          --image-tag ${{ github.sha }} \
+          --service-name $STAGE_SERVICE \
+          --region $AWS_REGION
+    - name: App Runner output
+      run: |
+        aws app-
