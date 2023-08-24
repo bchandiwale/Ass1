@@ -1,1 +1,1 @@
-7. Resources: This workflow uses the `actions/checkout@v2` and `aws-actions/configure-aws-credentials@v1` actions.
+7. Outputs: The workflow outputs the service IDs for each environment.
