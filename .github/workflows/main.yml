@@ -1,1 +1,1 @@
-7. Secrets: The workflow uses secrets for the AWS access key and secret key. These are stored in the GitHub repository.
+7. Resources: This workflow uses the `actions/checkout@v2` and `aws-actions/configure-aws-credentials@v1` actions.
