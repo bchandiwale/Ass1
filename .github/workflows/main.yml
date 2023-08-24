@@ -1,92 +1,91 @@
 
-name: Continuous Deployment to AWS App Runner
+name: CD pipeline
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-  push:
+  pull_request:
     branches:
       - main
 
 jobs:
   DeployDev:
-    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@master
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEV }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DEV }}
         aws-region: ${{ secrets.AWS_REGION }}
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
     - name: Build, tag, and push image to Amazon ECR
-      id: build-tag-push
       run: |
         # Build the Docker image
-        docker build -t $ECR_REPOSITORY .
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
 
         # Tag the Docker image
-        docker tag $ECR_REPOSITORY:latest $ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REPOSITORY:latest
 
-        # Push the Docker image to Amazon ECR
+        # Push the Docker image to ECR
         docker push $ECR_REPOSITORY:$IMAGE_TAG
     - name: Deploy to App Runner
-      id: deploy-app-runner
-      if: steps.build-tag-push.outputs.image-url
-      uses: aws-actions/deploy-to-app-runner@v1
+      uses: aws-actions/app-runner-deploy@master
       with:
-        image-url: ${{ steps.build-tag-push.outputs.image-url }}
-        service-name: ${{ secrets.DEV_SERVICE_NAME }}
-        access-role-arn: ${{ secrets.DEV_ACCESS_ROLE_ARN }}
+        service-name: ${{ secrets.APP_RUNNER_SERVICE_NAME_DEV }}
+        image-url: ${{ steps.login-ecr.outputs.image-url }}
+        access-role-arn: ${{ secrets.APP_RUNNER_ACCESS_ROLE_ARN_DEV }}
         region: ${{ secrets.AWS_REGION }}
         cpu: 256
         memory: 512
         port: 80
         wait-for-service-stability: true
     - name: App Runner output
-      id: app-runner-output
-      if: steps.deploy-app-runner.outputs.status
-      run: echo "App Runner status: ${{ steps.deploy-app-runner.outputs.status }}"
+      run: echo "App Runner URL: ${{ steps.deploy.outputs.url }}"
 
   DeployPreProd:
-    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@master
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PREPROD }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PREPROD }}
         aws-region: ${{ secrets.AWS_REGION }}
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
     - name: Build, tag, and push image to Amazon ECR
-      id: build-tag-push
       run: |
         # Build the Docker image
-        docker build -t $ECR_REPOSITORY .
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
 
         # Tag the Docker image
-        docker tag $ECR_REPOSITORY:latest $ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REPOSITORY:latest
 
-        # Push the Docker image to Amazon ECR
+        # Push the Docker image to ECR
         docker push $ECR_REPOSITORY:$IMAGE_TAG
     - name: Deploy to App Runner
-      id: deploy-app-runner
-      if: steps.build-tag-push.outputs.image-url
-      uses: aws-actions/deploy-to-app-runner@v1
+      uses: aws-actions/app-runner-deploy@master
       with:
-        image-url: ${{ steps.build-tag-push.outputs.image-url }}
-        service-name: ${{ secrets.PREPROD_SERVICE_NAME }}
-        access-role-arn: ${{ secrets.PREPROD_ACCESS_ROLE_ARN }}
+        service-name: ${{ secrets.APP_RUNNER_SERVICE_NAME_PREPROD }}
+        image-url: ${{ steps.login-ecr.outputs.image-url }}
+        access-role-arn: ${{ secrets.APP_RUNNER_ACCESS_ROLE_ARN_PREPROD }}
         region: ${{ secrets.AWS_REGION }}
         cpu: 256
         memory: 512
-        port
+        port: 80
+        wait-for-service-stability: true
+    - name: App Runner output
+      run: echo "App Runner URL: ${{ steps.deploy.outputs.url }}"
+
+  DeployProd:
+    if: github.ref == 'refs/heads/main'
+    runs-
