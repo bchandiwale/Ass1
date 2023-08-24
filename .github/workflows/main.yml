@@ -1,13 +1,13 @@
 
-name: Deploy to AWS App Runner
+name: Continuous Deployment to AWS App Runner
 
 on:
-  push:
-    branches:
-      - newui_master
   pull_request:
     branches:
-      - newui_master
+      - main
+  push:
+    branches:
+      - main
 
 jobs:
   DeployDev:
@@ -25,28 +25,37 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
     - name: Build, tag, and push image to Amazon ECR
+      id: build-tag-push
       run: |
-        $(aws ecr get-login --no-include-email --region ${{ secrets.AWS_REGION }})
-        IMAGE_TAG=${{ github.sha }}
-        ECR_REGISTRY=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}
-        docker build -t ${ECR_REGISTRY}:${IMAGE_TAG} .
-        docker push ${ECR_REGISTRY}:${IMAGE_TAG}
+        # Build the Docker image
+        docker build -t $ECR_REPOSITORY .
+
+        # Tag the Docker image
+        docker tag $ECR_REPOSITORY:latest $ECR_REPOSITORY:$IMAGE_TAG
+
+        # Push the Docker image to Amazon ECR
+        docker push $ECR_REPOSITORY:$IMAGE_TAG
     - name: Deploy to App Runner
-      uses: aws-actions/app-runner-deploy@v1
+      id: deploy-app-runner
+      if: steps.build-tag-push.outputs.image-url
+      uses: aws-actions/deploy-to-app-runner@v1
       with:
-        image-url: ${{ steps.login-ecr.outputs.image-url }}
-        service-name: ${{ secrets.SERVICE_NAME_DEV }}
-        access-role-arn: ${{ secrets.ACCESS_ROLE_ARN }}
+        image-url: ${{ steps.build-tag-push.outputs.image-url }}
+        service-name: ${{ secrets.DEV_SERVICE_NAME }}
+        access-role-arn: ${{ secrets.DEV_ACCESS_ROLE_ARN }}
         region: ${{ secrets.AWS_REGION }}
         cpu: 256
         memory: 512
         port: 80
         wait-for-service-stability: true
     - name: App Runner output
-      run: echo ${{ steps.deploy.outputs.status }}
+      id: app-runner-output
+      if: steps.deploy-app-runner.outputs.status
+      run: echo "App Runner status: ${{ steps.deploy-app-runner.outputs.status }}"
+
   DeployPreProd:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/newui_master'
+    if: github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v2
     - name: Configure AWS credentials
@@ -59,22 +68,25 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
     - name: Build, tag, and push image to Amazon ECR
+      id: build-tag-push
       run: |
-        $(aws ecr get-login --no-include-email --region ${{ secrets.AWS_REGION }})
-        IMAGE_TAG=${{ github.sha }}
-        ECR_REGISTRY=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}
-        docker build -t ${ECR_REGISTRY}:${IMAGE_TAG} .
-        docker push ${ECR_REGISTRY}:${IMAGE_TAG}
+        # Build the Docker image
+        docker build -t $ECR_REPOSITORY .
+
+        # Tag the Docker image
+        docker tag $ECR_REPOSITORY:latest $ECR_REPOSITORY:$IMAGE_TAG
+
+        # Push the Docker image to Amazon ECR
+        docker push $ECR_REPOSITORY:$IMAGE_TAG
     - name: Deploy to App Runner
-      uses: aws-actions/app-runner-deploy@v1
+      id: deploy-app-runner
+      if: steps.build-tag-push.outputs.image-url
+      uses: aws-actions/deploy-to-app-runner@v1
       with:
-        image-url: ${{ steps.login-ecr.outputs.image-url }}
-        service-name: ${{ secrets.SERVICE_NAME_PREPROD }}
-        access-role-arn: ${{ secrets.ACCESS_ROLE_ARN }}
+        image-url: ${{ steps.build-tag-push.outputs.image-url }}
+        service-name: ${{ secrets.PREPROD_SERVICE_NAME }}
+        access-role-arn: ${{ secrets.PREPROD_ACCESS_ROLE_ARN }}
         region: ${{ secrets.AWS_REGION }}
         cpu: 256
         memory: 512
-        port: 80
-        wait-for-service-stability: true
-    - name: App Runner output
-      run: echo
+        port
