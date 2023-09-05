@@ -1,37 +1,38 @@
-name: Build and push image to ECR
+name: Build and Push to ECR Public
 
-on: push
-  
+on:
+  push:
+    branches:
+      - main
+
+env:
+  ECR_REGISTRY: public.ecr.aws/aws-actions
+  IMAGE_NAME: sample-image
+  TAG: latest
 
 jobs:
-  
-  build:
-    
-    name: Build Image
+  build-and-push:
     runs-on: ubuntu-latest
-
-   
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Check out code
-      uses: actions/checkout@v2
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+      - name: Configure AWS credentials
+        id: aws-credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          
+      - name: Login to Amazon ECR Public
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
-
-    - name: Build, tag, and push image to Amazon ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: github-aws-actions
-        IMAGE_TAG: sample_image
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        run: |
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/l8s4x6g3
+          docker build -t aws-actions .
+          docker tag aws-actions:latest public.ecr.aws/l8s4x6g3/aws-actions:latest
+          docker push public.ecr.aws/l8s4x6g3/aws-actions:latest
